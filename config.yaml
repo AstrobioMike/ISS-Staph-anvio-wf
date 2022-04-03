@@ -28,6 +28,10 @@ anvio_pan_threads:
 mcl_inflation:
     6
 
+# anvio genomes db name
+genomes_db:
+    "our-isolates-GENOMES.db"
+
 # anvio pan name argument base (will have mcl and min occurence appended)
 anvio_pan_name:
     "ISS_Staph"
@@ -52,6 +56,7 @@ anvio_COGs_dir:
 # anvio KOs data dir
 anvio_KOs_dir:
     "~/ref-dbs/anvio/KOs/"
+
 
 ## the following directories will be created and populated by the workflow
 logs_dir:

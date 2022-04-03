@@ -61,7 +61,11 @@ rule all:
         external_genomes_file = "external-genomes.tsv",
         genomes_db = "our-isolates-GENOMES.db",
         pan = config["anvio_pan_output_dir"],
-        
+        pan_with_singletons_summary = config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "-pan-summary",
+        pan_without_singletons_summary = config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "_min_2-pan-summary",
+        pan_with_singletons_GC_frequencies = config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "-gene-cluster-frequencies.tsv",
+        pan_without_singletons_GC_frequencies = config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "_min_2-gene-cluster-frequencies.tsv"        
+
 
 rule genbank_to_anvio:
     input:
@@ -137,15 +141,15 @@ rule make_and_annotate_contigs_db:
     shell:
         """
         anvi-gen-contigs-database -f {input.fasta} -o {output.contigs_db} -n {params.name} --external-gene-calls {input.gene_calls} -T {params.num_threads} > {log} 2>&1
-        anvi-import-functions -c {output.contigs_db} -i {input.gene_functions} > {log} 2>&1
+        anvi-import-functions -c {output.contigs_db} -i {input.gene_functions} >> {log} 2>&1
 
-        anvi-run-hmms -T {params.num_threads} -I Bacteria_71 -c {output.contigs_db} > {log} 2>&1
+        anvi-run-hmms -T {params.num_threads} -I Bacteria_71 -c {output.contigs_db} >> {log} 2>&1
 
-        anvi-scan-trnas -T {params.num_threads} -c {output.contigs_db} > {log} 2>&1
+        anvi-scan-trnas -T {params.num_threads} -c {output.contigs_db} >> {log} 2>&1
 
-        anvi-run-ncbi-cogs -c {output.contigs_db} --cog-data-dir {params.COGs_dir} -T {params.num_threads} --sensitive > {log} 2>&1
+        anvi-run-ncbi-cogs -c {output.contigs_db} --cog-data-dir {params.COGs_dir} -T {params.num_threads} --sensitive >> {log} 2>&1
 
-        anvi-run-kegg-kofams -c {output.contigs_db} --kegg-data-dir {params.KOs_dir} -T {params.num_threads} > {log} 2>&1
+        anvi-run-kegg-kofams -c {output.contigs_db} --kegg-data-dir {params.KOs_dir} -T {params.num_threads} >> {log} 2>&1
         """
 
 
@@ -154,15 +158,15 @@ rule anvi_profile:
         contigs_db = os.path.join(config["contigs_dbs_dir"], "{genome}-contigs.db"),
         bam = os.path.join(config["bam_files_dir"] + "{genome}.bam")
     output:
-        profile_db = directory(os.path.join(config["profile_dbs_dir"], "{genome}-profile"))
+        profile_db_dir = directory(os.path.join(config["profile_dbs_dir"], "{genome}-profile"))
     params:
         name = "{genome}",
         num_threads = config["general_anvio_threads"]
     log:
-        config["logs_dir"] + "anvi_profile-{genome}.log"
+        log = config["logs_dir"] + "anvi_profile-{genome}.log"
     shell:
         """
-        anvi-profile -c {input.contigs_db} -i {input.bam} -o {output.profile_db} -S {params.name} \
+        anvi-profile -c {input.contigs_db} -i {input.bam} -o {output.profile_db_dir} -S {params.name} \
                      --cluster-contigs --min-contig-length 1000 -T {params.num_threads} > {log} 2>&1
         """
 
@@ -191,20 +195,20 @@ rule gen_genomes_storage:
     input:
         "external-genomes.tsv"
     output:
-        "our-isolates-GENOMES.db"
+        config["genomes_db"]
     params:
         gene_caller = "NCBI_PGAP"
     log:
         config["logs_dir"] + "gen_genomes_storage.log"
     shell:
         """
-        anvi-gen-genomes-storage -e {input} -o {output} --gene-caller {params.gene_caller}
+        anvi-gen-genomes-storage -e {input} -o {output} --gene-caller {params.gene_caller} > {log} 2>&1
         """
 
 
 rule anvi_pan:
     input:
-        genomes_db = "our-isolates-GENOMES.db"
+        genomes_db = config["genomes_db"]
     output:
         directory(config["anvio_pan_output_dir"])
     params:
@@ -213,23 +217,85 @@ rule anvi_pan:
         name_with_singletons = config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]),
         name_without_singletons = config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "_min_2"
     log:
-        config["logs_dir"] + "anvi_pan_with_singletons.log"
+        log1 = config["logs_dir"] + "anvi_pan_with_singletons.log",
+        log2 = config["logs_dir"] + "anvi_pan_without_singletons.log"
     shell:
         """
         anvi-pan-genome -g {input.genomes_db} --mcl-inflation {params.mcl_inflation} --min-occurrence 1 \
-                        -n {params.name_with_singletons} -o {output} -T {params.num_threads} --sensitive > {log} 2>&1
-
-        printf "\n\n    Now running without singletons:\n\n" >> {log}
+                        -n {params.name_with_singletons} -o {output} -T {params.num_threads} --sensitive > {log.log1} 2>&1
 
         anvi-pan-genome -g {input.genomes_db} --mcl-inflation {params.mcl_inflation} --min-occurrence 2 \
-                        -n {params.name_without_singletons} -o {output} -T {params.num_threads} --sensitive > {log} 2>&1
+                        -n {params.name_without_singletons} -o {output} -T {params.num_threads} --sensitive > {log.log2} 2>&1
         """
 
 
-# rule anvi_summarize:
+rule pan_with_singletons_summary:
+    input:
+        pan_output_dir_trigger = config["anvio_pan_output_dir"],
+        genomes_db = config["genomes_db"]
+    params:
+        pan_db = os.path.join(config["anvio_pan_output_dir"], config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "-PAN.db")
+    output:
+        pan_summary = directory(config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "-pan-summary")
+    log:
+        config["logs_dir"] + "pan_with_singletons_summary.log"
+    shell:
+        """
+        anvi-script-add-default-collection -p {params.pan_db} > {log} 2>&1
+        anvi-summarize -p {params.pan_db} -g {input.genomes_db} -C DEFAULT -o {output.pan_summary} >> {log} 2>&1
+        """
 
 
-# rule gen_GC_freq_table:
+rule pan_without_singletons_summary:
+    input:
+        pan_output_dir_trigger = config["anvio_pan_output_dir"],
+        genomes_db = config["genomes_db"]
+    params:
+        pan_db = os.path.join(config["anvio_pan_output_dir"], config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "_min_2-PAN.db")
+    output:
+        pan_summary = directory(config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "_min_2-pan-summary")
+    log:
+        config["logs_dir"] + "pan_without_singletons_summary.log"
+    shell:
+        """
+        anvi-script-add-default-collection -p {params.pan_db} > {log} 2>&1
+        anvi-summarize -p {params.pan_db} -g {input.genomes_db} -C DEFAULT -o {output.pan_summary} >> {log} 2>&1
+        """
+
+
+rule gen_pan_with_singletons_GC_freq_table:
+    input:
+        pan_output_dir_trigger = config["anvio_pan_output_dir"]
+    params:
+        pan_db = os.path.join(config["anvio_pan_output_dir"], config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "-PAN.db"),
+        tmp_out = config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "-gene-cluster-frequencies.tmp"
+    output:
+        config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "-gene-cluster-frequencies.tsv"
+    log:
+        config["logs_dir"] + "gen_pan_with_singletons_GC_freq_table.log"
+    shell:
+        """
+        anvi-export-table --table gene_cluster_frequencies {params.pan_db} -o {params.tmp_out} > {log} 2>&1
+        python scripts/convert-GC-freq-from-long-to-wide.py {params.tmp_out} {output} >> {log} 2>&1
+        """
+
+
+rule gen_pan_without_singletons_GC_freq_table:
+    input:
+        pan_output_dir_trigger = config["anvio_pan_output_dir"]
+    params:
+        pan_db = os.path.join(config["anvio_pan_output_dir"], config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "_min_2-PAN.db"),
+        tmp_out = config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "_min_2-gene-cluster-frequencies.tmp"
+    output:
+        config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "_min_2-gene-cluster-frequencies.tsv"
+    log:
+        config["logs_dir"] + "gen_pan_without_singletons_GC_freq_table.log"
+    shell:
+        """
+        anvi-export-table --table gene_cluster_frequencies {params.pan_db} -o {params.tmp_out} > {log} 2>&1
+        python scripts/convert-GC-freq-from-long-to-wide.py {params.tmp_out} {output} >> {log} 2>&1
+        """
+
 
 
 # rule gen_functions_table:
