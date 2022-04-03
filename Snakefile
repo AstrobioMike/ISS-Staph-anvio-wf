@@ -35,7 +35,8 @@ dirs_to_create = [
                   config["bam_files_dir"], 
                   config["bowtie2_indexes_dir"], 
                   config["contigs_dbs_dir"], 
-                  config["profile_dbs_dir"]
+                  config["profile_dbs_dir"],
+                  config["logs_dir"]
                   ]
 
 for dir in dirs_to_create:
@@ -225,10 +226,19 @@ rule anvi_pan:
         """
 
 
+# rule anvi_summarize:
+
+
+# rule gen_GC_freq_table:
+
+
+# rule gen_functions_table:
+
+
 rule clean_all:
     shell:
         """
-        rm -rf {dirs_to_create} "external-genomes.tsv"
+        rm -rf {dirs_to_create} "external-genomes.tsv" *-pan *-GENOMES.db
         """
 
 
