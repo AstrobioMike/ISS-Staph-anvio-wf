@@ -218,7 +218,7 @@ rule anvi_pan:
         anvi-pan-genome -g {input.genomes_db} --mcl-inflation {params.mcl_inflation} --min-occurrence 1 \
                         -n {params.name_with_singletons} -o {output} -T {params.num_threads} --sensitive > {log} 2>&1
 
-        printf "\n\n    Now running without singletons:\n\n"
+        printf "\n\n    Now running without singletons:\n\n" >> {log}
 
         anvi-pan-genome -g {input.genomes_db} --mcl-inflation {params.mcl_inflation} --min-occurrence 2 \
                         -n {params.name_without_singletons} -o {output} -T {params.num_threads} --sensitive > {log} 2>&1
