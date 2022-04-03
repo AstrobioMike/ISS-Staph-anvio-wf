@@ -55,9 +55,12 @@ rule all:
         anvio_input_files = expand(os.path.join(config["input_anvio_files_dir"], "{genome}-contigs.fa"), genome = genome_ID_list),
         bowtie2_indexes = expand(os.path.join(config["bowtie2_indexes_dir"], "{genome}.1.bt2"), genome = genome_ID_list),
         bam_files = expand(os.path.join(config["bam_files_dir"], "{genome}.bam"), genome = genome_ID_list),
-        contigs_dbs = expand(os.path.join(config["contigs_dbs_dir"], "{genome}-contigs.db"), genome = genome_ID_list)
-
-
+        contigs_dbs = expand(os.path.join(config["contigs_dbs_dir"], "{genome}-contigs.db"), genome = genome_ID_list),
+        profile_dbs = expand(os.path.join(config["profile_dbs_dir"], "{genome}-profile"), genome = genome_ID_list),
+        external_genomes_file = "external-genomes.tsv",
+        genomes_db = "our-isolates-GENOMES.db",
+        pan = config["anvio_pan_output_dir"],
+        
 
 rule genbank_to_anvio:
     input:
@@ -158,13 +161,74 @@ rule anvi_profile:
         config["logs_dir"] + "anvi_profile-{genome}.log"
     shell:
         """
-        anvi-profile -c {input.contigs_db} -i {input.bam} -o {output.profile_db} -S {params.name} --cluster-contigs --min-contig-length 1000 -T {params.num_threads} > {log} 2>&1
+        anvi-profile -c {input.contigs_db} -i {input.bam} -o {output.profile_db} -S {params.name} \
+                     --cluster-contigs --min-contig-length 1000 -T {params.num_threads} > {log} 2>&1
         """
+
+
+rule gen_external_genomes:
+    input:
+        contigs_dbs_trigger = expand(os.path.join(config["contigs_dbs_dir"], "{genome}-contigs.db"), genome = genome_ID_list),
+        profile_dbs_trigger = expand(os.path.join(config["profile_dbs_dir"], "{genome}-profile"), genome = genome_ID_list)
+    output:
+        "external-genomes.tsv"
+    params:
+        genomes_file = config["genome_IDs_file"]
+    shell:
+        """
+        printf "name\tcontigs_db_path\n" > {output}
+
+        sed 's/^/contigs-dbs\//' {params.genomes_file} | sed 's/$/-contigs.db/'> paths.tmp
+
+        paste {params.genomes_file} paths.tmp >> {output}
+
+        rm paths.tmp 
+        """
+
+
+rule gen_genomes_storage:
+    input:
+        "external-genomes.tsv"
+    output:
+        "our-isolates-GENOMES.db"
+    params:
+        gene_caller = "NCBI_PGAP"
+    log:
+        config["logs_dir"] + "gen_genomes_storage.log"
+    shell:
+        """
+        anvi-gen-genomes-storage -e {input} -o {output} --gene-caller {params.gene_caller}
+        """
+
+
+rule anvi_pan:
+    input:
+        genomes_db = "our-isolates-GENOMES.db"
+    output:
+        directory(config["anvio_pan_output_dir"])
+    params:
+        mcl_inflation = config["mcl_inflation"],
+        num_threads = config["anvio_pan_threads"],
+        name_with_singletons = config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]),
+        name_without_singletons = config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "_min_2"
+    log:
+        config["logs_dir"] + "anvi_pan_with_singletons.log"
+    shell:
+        """
+        anvi-pan-genome -g {input.genomes_db} --mcl-inflation {params.mcl_inflation} --min-occurrence 1 \
+                        -n {params.name_with_singletons} -o {output} -T {params.num_threads} --sensitive > {log} 2>&1
+
+        printf "\n\n    Now running without singletons:\n\n"
+
+        anvi-pan-genome -g {input.genomes_db} --mcl-inflation {params.mcl_inflation} --min-occurrence 2 \
+                        -n {params.name_without_singletons} -o {output} -T {params.num_threads} --sensitive > {log} 2>&1
+        """
+
 
 rule clean_all:
     shell:
         """
-        rm -rf {dirs_to_create}
+        rm -rf {dirs_to_create} "external-genomes.tsv"
         """
 
 

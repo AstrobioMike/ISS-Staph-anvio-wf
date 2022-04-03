@@ -16,10 +16,25 @@ genome_IDs_file:
 mapping_threads:
     20
 
-# threads used in parallelizable distint anvio steps (may be multiplied by the number of concurrent)
+# threads used in parallelizable distint anvio steps (may be multiplied by the number of concurrent jobs running)
 general_anvio_threads:
     20
 
+# threads used in anvio pan (won't be multiplied by number of jobs allowed)
+anvio_pan_threads:
+    50
+
+# anvio pan mcl inflation
+mcl_inflation:
+    6
+
+# anvio pan name argument base (will have mcl and min occurence appended)
+anvio_pan_name:
+    "ISS_Staph"
+
+# anvio pan output dir
+anvio_pan_output_dir:
+    "ISS-Staph-pan"
 
 ## the following 4 directories should exist already
 # path to reads directory
