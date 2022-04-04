@@ -30,7 +30,7 @@ mcl_inflation:
 
 # anvio genomes db name
 genomes_db:
-    "our-isolates-GENOMES.db"
+    "ISS-Staph-GENOMES.db"
 
 # anvio pan name argument base (will have mcl and min occurence appended)
 anvio_pan_name:

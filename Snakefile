@@ -59,7 +59,7 @@ rule all:
         contigs_dbs = expand(os.path.join(config["contigs_dbs_dir"], "{genome}-contigs.db"), genome = genome_ID_list),
         profile_dbs = expand(os.path.join(config["profile_dbs_dir"], "{genome}-profile"), genome = genome_ID_list),
         external_genomes_file = "external-genomes.tsv",
-        genomes_db = "our-isolates-GENOMES.db",
+        genomes_db = config["genomes_db"],
         pan = config["anvio_pan_output_dir"],
         pan_with_singletons_summary = config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "-pan-summary",
         pan_without_singletons_summary = config["anvio_pan_name"] + "_mcl_" + str(config["mcl_inflation"]) + "_min_2-pan-summary",
@@ -140,7 +140,9 @@ rule make_and_annotate_contigs_db:
         config["logs_dir"] + "make_and_annotate_contigs_db-{genome}.log"
     shell:
         """
-        anvi-gen-contigs-database -f {input.fasta} -o {output.contigs_db} -n {params.name} --external-gene-calls {input.gene_calls} -T {params.num_threads} > {log} 2>&1
+        anvi-gen-contigs-database -f {input.fasta} -o {output.contigs_db} -n {params.name} --external-gene-calls {input.gene_calls} \
+                                  -T {params.num_threads} --ignore-internal-stop-codons > {log} 2>&1
+                                  
         anvi-import-functions -c {output.contigs_db} -i {input.gene_functions} >> {log} 2>&1
 
         anvi-run-hmms -T {params.num_threads} -I Bacteria_71 -c {output.contigs_db} >> {log} 2>&1
@@ -297,14 +299,10 @@ rule gen_pan_without_singletons_GC_freq_table:
         """
 
 
-
-# rule gen_functions_table:
-
-
 rule clean_all:
+    params:
+        config["genomes_db"]
     shell:
         """
-        rm -rf {dirs_to_create} "external-genomes.tsv" *-pan *-GENOMES.db
+        rm -rf {dirs_to_create} "external-genomes.tsv" *-pan *-GENOMES.db {params}
         """
-
-
